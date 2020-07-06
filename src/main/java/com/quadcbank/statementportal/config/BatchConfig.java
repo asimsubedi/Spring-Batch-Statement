@@ -15,6 +15,7 @@ import org.springframework.batch.core.configuration.annotation.EnableBatchProces
 import org.springframework.batch.core.configuration.annotation.JobBuilderFactory;
 import org.springframework.batch.core.configuration.annotation.StepBuilderFactory;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
+import org.springframework.batch.core.step.tasklet.MethodInvokingTaskletAdapter;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
@@ -28,12 +29,14 @@ import org.springframework.batch.item.file.mapping.BeanWrapperFieldSetMapper;
 import org.springframework.batch.item.file.mapping.DefaultLineMapper;
 import org.springframework.batch.item.file.transform.DelimitedLineTokenizer;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.propertyeditors.CustomDateEditor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import com.quadcbank.statementportal.dao.TransactionsDao;
 import com.quadcbank.statementportal.listener.JobCompletionListener;
 import com.quadcbank.statementportal.model.Transactions;
 import com.quadcbank.statementportal.processor.TransactionsItemProcessor;
@@ -59,7 +62,7 @@ public class BatchConfig extends DefaultBatchConfigurer {
 
 		DefaultLineMapper<Transactions> lineMapper = new DefaultLineMapper<Transactions>();
 
-		lineMapper.setLineTokenizer(new DelimitedLineTokenizer() {
+		lineMapper.setLineTokenizer(new DelimitedLineTokenizer(DelimitedLineTokenizer.DELIMITER_TAB) {
 			{
 				setNames(new String[] { "date", "merchant", "amount", "location" });
 			}
@@ -67,7 +70,6 @@ public class BatchConfig extends DefaultBatchConfigurer {
 
 		lineMapper.setFieldSetMapper(new BeanWrapperFieldSetMapper<Transactions>() {
 			{
-				
 				// converting string date to Date format for date field...
 				DateFormat df = new SimpleDateFormat("MM-dd-yyyy");
 
@@ -88,7 +90,7 @@ public class BatchConfig extends DefaultBatchConfigurer {
 	@Bean
 	public FlatFileItemReader<Transactions> reader() {
 		return new FlatFileItemReaderBuilder<Transactions>().name("transactionsItemReader")
-				.resource(new ClassPathResource("statement.csv")).lineMapper(lineMapper()).linesToSkip(1).build();
+				.resource(new ClassPathResource("statement.txt")).lineMapper(lineMapper()).linesToSkip(1).build();
 	}
 
 	@Bean
@@ -104,17 +106,61 @@ public class BatchConfig extends DefaultBatchConfigurer {
 		return new TransactionsItemProcessor();
 	}
 
-	@Bean
-	public Job createTransactionsJob(JobCompletionListener listener, Step step1) {
-		return jobBuilderFactory.get("createTransactionsJob").incrementer(new RunIdIncrementer()).listener(listener)
-				.flow(step1).end().build();
+	@Bean(name = "creationJob")
+	public Job createTransactionsJob(JobCompletionListener listener, @Qualifier("creationStep") Step step) {
+		return jobBuilderFactory.get("createTransactionsJob")
+				.incrementer(new RunIdIncrementer())
+				.listener(listener)
+				.flow(step)
+				.end()
+				.build();
 	}
 
-	@Bean
-	public Step step1(ItemReader<Transactions> reader, ItemWriter<Transactions> writer,
+	@Bean(name = "creationStep")
+	public Step creationStep(ItemReader<Transactions> reader, ItemWriter<Transactions> writer,
 			ItemProcessor<Transactions, Transactions> processor) {
-		return stepBuilderFactory.get("step1").<Transactions, Transactions>chunk(1).reader(reader).processor(processor)
-				.writer(writer).build();
+		return stepBuilderFactory.get("creationStep")
+				.<Transactions, Transactions>chunk(1)
+				.reader(reader)
+				.processor(processor)
+				.writer(writer)
+				.build();
+	}
+	
+	@Bean(name = "updateJob")
+	public Job updateTransactionsJob(JobCompletionListener listener, @Qualifier("updateStep") Step step) {
+		
+		return jobBuilderFactory.get("updateTransactionJob")
+				.incrementer(new RunIdIncrementer())
+				.listener(listener)
+				.flow(step)
+				.end()
+				.build();
+	}
+	
+	@Bean(name = "updateStep")	
+	public Step updateStep() {
+		
+		return this.stepBuilderFactory.get("updateStep")
+				.tasklet(updateTransactionTasklet())
+				.build();
+		
+	}
+	
+	@Bean
+	public TransactionsDao getTransactionsDao() {
+		return new TransactionsDao();
+	}
+	
+	@Bean
+	public MethodInvokingTaskletAdapter updateTransactionTasklet() {
+		
+		MethodInvokingTaskletAdapter adapter = new MethodInvokingTaskletAdapter();
+		
+		adapter.setTargetObject(getTransactionsDao());
+		adapter.setTargetMethod("updateTransactions");
+		
+		return adapter;
 	}
 
 	@Bean
