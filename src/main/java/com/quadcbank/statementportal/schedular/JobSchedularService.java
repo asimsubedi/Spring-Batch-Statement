@@ -36,7 +36,7 @@ public class JobSchedularService {
 	@Autowired
 	private JobLauncher jobLauncher;
 
-	@Scheduled(cron = "0 38 18 * * ?")
+	@Scheduled(cron = "${insert-time}")
 	public void runTransactionsInsertJob() {
 		
 		log.info("Insertion Job Triggered!!!");
@@ -58,7 +58,7 @@ public class JobSchedularService {
 
 	}
 	
-	@Scheduled(cron = "0 39 18 * * ?")
+	@Scheduled(cron = "${update-time}")
 	public void runTransactionsUpdateJob() {
 
 		log.info("Update Job Triggered!!!");

@@ -90,7 +90,10 @@ public class BatchConfig extends DefaultBatchConfigurer {
 	@Bean
 	public FlatFileItemReader<Transactions> reader() {
 		return new FlatFileItemReaderBuilder<Transactions>().name("transactionsItemReader")
-				.resource(new ClassPathResource("statement.txt")).lineMapper(lineMapper()).linesToSkip(1).build();
+				.resource(new ClassPathResource("statement.txt"))
+				.lineMapper(lineMapper())
+				.linesToSkip(1)
+				.build();
 	}
 
 	@Bean
@@ -98,7 +101,8 @@ public class BatchConfig extends DefaultBatchConfigurer {
 		return new JdbcBatchItemWriterBuilder<Transactions>()
 				.itemSqlParameterSourceProvider(new BeanPropertyItemSqlParameterSourceProvider<Transactions>())
 				.sql("INSERT INTO cc_transactions (date, merchant, amount, location) VALUES (:date, :merchant, :amount, :location)")
-				.dataSource(dataSource).build();
+				.dataSource(dataSource)
+				.build();
 	}
 
 	@Bean
